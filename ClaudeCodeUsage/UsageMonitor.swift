@@ -11,6 +11,7 @@ final class UsageMonitor: ObservableObject {
     @Published var enterpriseReset: String = "--"
     @Published var litellmPercent: String = "--"
     @Published var litellmReset: String = "--"
+    @Published var activeProfile: AccountProfile?
 
     var onChange: (() -> Void)?
 
@@ -34,6 +35,7 @@ final class UsageMonitor: ObservableObject {
     }
 
     func refresh() {
+        activeProfile = AccountProfile.detectActive()
         enterpriseReset = "\(Self.daysUntil(Self.enterpriseExpiry))d"
         litellmReset = "\(Self.daysUntil(Self.startOfNextMonth()))d"
 

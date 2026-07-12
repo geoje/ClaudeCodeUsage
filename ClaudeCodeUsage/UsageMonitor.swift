@@ -14,7 +14,7 @@ final class UsageMonitor: ObservableObject {
     @Published var litellmReset: String = "--"
     @Published var activeProfile: AccountProfile?
 
-    @AppStorage("enterprisePercent") private var storedEnterprisePercent: String = "--"
+    private var enterprisePercentMemory: String?
 
     var onChange: (() -> Void)?
 
@@ -22,7 +22,6 @@ final class UsageMonitor: ObservableObject {
     private var timer: Timer?
 
     init() {
-        enterprisePercent = storedEnterprisePercent
     }
 
     private static let enterpriseExpiry: Date = {
@@ -37,7 +36,8 @@ final class UsageMonitor: ObservableObject {
         refresh()
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
+            guard let self else { return }
+            Task { @MainActor in self.refresh() }
         }
     }
 
@@ -48,7 +48,7 @@ final class UsageMonitor: ObservableObject {
 
         let isEnterpriseActive = activeProfile == .enterprise
         if !isEnterpriseActive {
-            enterprisePercent = storedEnterprisePercent
+            enterprisePercent = enterprisePercentMemory ?? "--"
         }
 
         Task { [weak self] in
@@ -56,12 +56,14 @@ final class UsageMonitor: ObservableObject {
             async let personalOutput = self.runScript(named: "usage-personal")
             async let litellmOutput = self.runScript(named: "usage-litellm")
 
-            if isEnterpriseActive, let output = await self.runScript(named: "usage-enterprise") {
-                self.applyEnterprise(output)
+            if isEnterpriseActive {
+                let result = await self.runScript(named: "usage-enterprise")
+                print("[Enterprise] exitCode=\(result.exitCode), stdout=\(result.stdout ?? "<nil>"), stderr=\(result.stderr ?? "<nil>")")
+                if let output = result.stdout { self.applyEnterprise(output) }
             }
 
-            if let output = await personalOutput { self.applyPersonal(output) }
-            if let output = await litellmOutput { self.applyLitellm(output) }
+            if let output = await personalOutput.stdout { self.applyPersonal(output) }
+            if let output = await litellmOutput.stdout { self.applyLitellm(output) }
 
             self.onChange?()
         }
@@ -69,8 +71,16 @@ final class UsageMonitor: ObservableObject {
 
     // MARK: - Script execution
 
-    private func runScript(named name: String) async -> String? {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "sh") else { return nil }
+    private struct ScriptResult {
+        let stdout: String?
+        let stderr: String?
+        let exitCode: Int32
+    }
+
+    private func runScript(named name: String) async -> ScriptResult {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "sh") else {
+            return ScriptResult(stdout: nil, stderr: "bundle resource \(name).sh not found", exitCode: -1)
+        }
 
         return await withCheckedContinuation { continuation in
             let process = Process()
@@ -78,18 +88,24 @@ final class UsageMonitor: ObservableObject {
             process.arguments = [url.path]
 
             let stdout = Pipe()
+            let stderr = Pipe()
             process.standardOutput = stdout
-            process.standardError = Pipe()
+            process.standardError = stderr
 
-            process.terminationHandler = { _ in
-                let data = stdout.fileHandleForReading.readDataToEndOfFile()
-                continuation.resume(returning: String(data: data, encoding: .utf8))
+            process.terminationHandler = { process in
+                let outData = stdout.fileHandleForReading.readDataToEndOfFile()
+                let errData = stderr.fileHandleForReading.readDataToEndOfFile()
+                continuation.resume(returning: ScriptResult(
+                    stdout: String(data: outData, encoding: .utf8),
+                    stderr: String(data: errData, encoding: .utf8),
+                    exitCode: process.terminationStatus
+                ))
             }
 
             do {
                 try process.run()
             } catch {
-                continuation.resume(returning: nil)
+                continuation.resume(returning: ScriptResult(stdout: nil, stderr: error.localizedDescription, exitCode: -1))
             }
         }
     }
@@ -124,13 +140,13 @@ final class UsageMonitor: ObservableObject {
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.range(of: "^\\d+%$", options: .regularExpression) != nil else { return }
         enterprisePercent = trimmed
-        storedEnterprisePercent = trimmed
+        enterprisePercentMemory = trimmed
     }
 
     private func applyLitellm(_ output: String) {
-        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard Int(trimmed) != nil else { return }
-        litellmPercent = "\(trimmed)%"
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "%", with: "")
+        guard let value = Double(trimmed) else { return }
+        litellmPercent = "\(Int(value))%"
     }
 
     // MARK: - Date helpers

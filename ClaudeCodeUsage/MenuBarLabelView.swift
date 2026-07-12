@@ -14,14 +14,14 @@ struct MenuBarLabelView: View {
                 }.opacity(0.6)
             }
 
-            Spacer().frame(width: 10)
+            Spacer().frame(width: 8)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text("2%")
                 Text("34d").opacity(0.6)
             }
             
-            Spacer().frame(width: 10)
+            Spacer().frame(width: 8)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text("5%").opacity(0.6)
@@ -29,6 +29,7 @@ struct MenuBarLabelView: View {
             }
         }
         .font(.system(size: 9, weight: .regular))
+        .padding(.horizontal, 4)
         .monospacedDigit()
         .fixedSize()
     }

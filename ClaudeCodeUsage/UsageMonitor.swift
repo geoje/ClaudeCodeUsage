@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import SwiftUI
 
 @MainActor
 final class UsageMonitor: ObservableObject {
@@ -13,10 +14,16 @@ final class UsageMonitor: ObservableObject {
     @Published var litellmReset: String = "--"
     @Published var activeProfile: AccountProfile?
 
+    @AppStorage("enterprisePercent") private var storedEnterprisePercent: String = "--"
+
     var onChange: (() -> Void)?
 
     private let refreshInterval: TimeInterval = 300
     private var timer: Timer?
+
+    init() {
+        enterprisePercent = storedEnterprisePercent
+    }
 
     private static let enterpriseExpiry: Date = {
         var components = DateComponents()
@@ -39,14 +46,21 @@ final class UsageMonitor: ObservableObject {
         enterpriseReset = "\(Self.daysUntil(Self.enterpriseExpiry))d"
         litellmReset = "\(Self.daysUntil(Self.startOfNextMonth()))d"
 
+        let isEnterpriseActive = activeProfile == .enterprise
+        if !isEnterpriseActive {
+            enterprisePercent = storedEnterprisePercent
+        }
+
         Task { [weak self] in
             guard let self else { return }
             async let personalOutput = self.runScript(named: "usage-personal")
-            async let enterpriseOutput = self.runScript(named: "usage-enterprise")
             async let litellmOutput = self.runScript(named: "usage-litellm")
 
+            if isEnterpriseActive, let output = await self.runScript(named: "usage-enterprise") {
+                self.applyEnterprise(output)
+            }
+
             if let output = await personalOutput { self.applyPersonal(output) }
-            if let output = await enterpriseOutput { self.applyEnterprise(output) }
             if let output = await litellmOutput { self.applyLitellm(output) }
 
             self.onChange?()
@@ -110,6 +124,7 @@ final class UsageMonitor: ObservableObject {
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.range(of: "^\\d+%$", options: .regularExpression) != nil else { return }
         enterprisePercent = trimmed
+        storedEnterprisePercent = trimmed
     }
 
     private func applyLitellm(_ output: String) {

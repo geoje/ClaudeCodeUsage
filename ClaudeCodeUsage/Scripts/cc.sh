@@ -21,8 +21,21 @@ restore_creds() {
   fi
 }
 
+case "${1:-}" in
+  1)
+    new_target="$HOME_DIR/.claude-home"
+    ;;
+  2|3)
+    new_target="$HOME_DIR/.claude-work"
+    ;;
+  *)
+    echo "Usage: $0 {1|2|3}"
+    exit 1
+    ;;
+esac
+
 current_target=$(readlink "$HOME_DIR/.claude" 2>/dev/null || true)
-if [[ -n "$current_target" ]]; then
+if [[ -n "$current_target" && "$current_target" == "$new_target" ]]; then
   save_current_creds "$current_target"
 fi
 
@@ -42,10 +55,6 @@ case "${1:-}" in
     ln -sfn "$HOME_DIR/.claude-work" "$HOME_DIR/.claude"
     cp "$HOME_DIR/.claude-work/settings.dh.json" "$HOME_DIR/.claude-work/settings.json"
     echo "LiteLLM"
-    ;;
-  *)
-    echo "Usage: $0 {1|2|3}"
-    exit 1
     ;;
 esac
 

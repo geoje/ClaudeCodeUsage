@@ -2,9 +2,10 @@ import AppKit
 import SwiftUI
 import ServiceManagement
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private var launchAtLoginItem: NSMenuItem?
+    private var accountItems: [AccountProfile: NSMenuItem] = [:]
     private let usageMonitor = UsageMonitor()
     private var hostingView: NSHostingView<MenuBarLabelView>?
     private weak var statusButton: NSStatusBarButton?
@@ -25,6 +26,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         usageMonitor.start()
 
         let menu = NSMenu()
+        menu.delegate = self
+
+        for profile in AccountProfile.allCases {
+            let accountItem = NSMenuItem(
+                title: profile.title,
+                action: #selector(selectAccount(_:)),
+                keyEquivalent: ""
+            )
+            accountItem.target = self
+            accountItem.representedObject = profile
+            menu.addItem(accountItem)
+            accountItems[profile] = accountItem
+        }
+
+        menu.addItem(.separator())
 
         let launchAtLogin = NSMenuItem(
             title: "Launch at Login",
@@ -41,6 +57,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.menu = menu
 
         statusItem = item
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        let active = AccountProfile.detectActive()
+        for (profile, menuItem) in accountItems {
+            menuItem.state = (profile == active) ? .on : .off
+        }
+    }
+
+    @objc private func selectAccount(_ sender: NSMenuItem) {
+        guard let profile = sender.representedObject as? AccountProfile else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            switch await profile.run() {
+            case .success:
+                self.usageMonitor.refresh()
+            case .failure(let error):
+                NSLog("Failed to switch to \(profile.title): \(error.message)")
+                let alert = NSAlert()
+                alert.messageText = "Couldn't Switch to \(profile.title)"
+                alert.informativeText = error.message
+                alert.alertStyle = .warning
+                alert.runModal()
+            }
+        }
     }
 
     @objc private func toggleLaunchAtLogin() {

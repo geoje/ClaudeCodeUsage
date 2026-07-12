@@ -84,10 +84,10 @@ final class UsageMonitor: ObservableObject {
 
     private func applyPersonal(_ output: String) {
         var headers: [String: String] = [:]
-        for line in output.split(separator: "\n") {
+        for line in output.split(whereSeparator: \.isNewline) {
             guard let colonIndex = line.firstIndex(of: ":") else { continue }
-            let key = line[line.startIndex..<colonIndex].trimmingCharacters(in: .whitespaces)
-            let value = line[line.index(after: colonIndex)...].trimmingCharacters(in: .whitespaces)
+            let key = line[line.startIndex..<colonIndex].trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = line[line.index(after: colonIndex)...].trimmingCharacters(in: .whitespacesAndNewlines)
             headers[key] = value
         }
 

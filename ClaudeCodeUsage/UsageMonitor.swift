@@ -50,7 +50,6 @@ final class UsageMonitor: ObservableObject {
 
         let now = Date().timeIntervalSince1970
 
-        checkAndUpdateExpiredPercentages(now: now)
         updateAllResetTimes(now: now)
 
         Task { [weak self] in
@@ -69,21 +68,6 @@ final class UsageMonitor: ObservableObject {
             if let output = await litellmOutput.stdout { self.applyLitellm(output) }
 
             self.onChange?()
-        }
-    }
-
-    private func checkAndUpdateExpiredPercentages(now: TimeInterval) {
-        if let deadline = sessionResetDeadline, now >= deadline {
-            sessionPercent = "0%"
-        }
-        if let deadline = weeklyResetDeadline, now >= deadline {
-            weeklyPercent = "0%"
-        }
-        if let deadline = enterpriseResetDeadline, now >= deadline {
-            enterprisePercent = "0%"
-        }
-        if let deadline = litellmResetDeadline, now >= deadline {
-            litellmPercent = "0%"
         }
     }
 

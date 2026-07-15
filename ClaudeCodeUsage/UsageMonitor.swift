@@ -148,26 +148,24 @@ final class UsageMonitor: ObservableObject {
     // MARK: - Parsing
 
     private func applyHome(_ output: String) {
-        var headers: [String: String] = [:]
+        var fields: [String: String] = [:]
         for line in output.split(whereSeparator: \.isNewline) {
-            guard let colonIndex = line.firstIndex(of: ":") else { continue }
-            let key = line[line.startIndex..<colonIndex].trimmingCharacters(in: .whitespacesAndNewlines)
-            let value = line[line.index(after: colonIndex)...].trimmingCharacters(in: .whitespacesAndNewlines)
-            headers[key] = value
+            guard let equalsIndex = line.firstIndex(of: "=") else { continue }
+            let key = line[line.startIndex..<equalsIndex].trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = line[line.index(after: equalsIndex)...].trimmingCharacters(in: .whitespacesAndNewlines)
+            fields[key] = value
         }
 
         let now = Date().timeIntervalSince1970
 
-        if let utilization = headers["anthropic-ratelimit-unified-5h-utilization"].flatMap(Double.init),
-           let reset = headers["anthropic-ratelimit-unified-5h-reset"].flatMap(Double.init) {
-            sessionPercent = "\(Int((utilization * 100).rounded()))%"
+        if let percent = fields["SESSION_PERCENT"], let reset = fields["SESSION_RESET_EPOCH"].flatMap(Double.init) {
+            sessionPercent = "\(percent)%"
             sessionResetDeadline = reset
             sessionReset = "\(max(0, Int(((reset - now) / 3600).rounded(.up))))h"
         }
 
-        if let utilization = headers["anthropic-ratelimit-unified-7d-utilization"].flatMap(Double.init),
-           let reset = headers["anthropic-ratelimit-unified-7d-reset"].flatMap(Double.init) {
-            weeklyPercent = "\(Int((utilization * 100).rounded()))%"
+        if let percent = fields["WEEKLY_PERCENT"], let reset = fields["WEEKLY_RESET_EPOCH"].flatMap(Double.init) {
+            weeklyPercent = "\(percent)%"
             weeklyResetDeadline = reset
             weeklyReset = "\(max(0, Int(((reset - now) / 86400).rounded(.up))))d"
         }

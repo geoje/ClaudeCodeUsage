@@ -1,4 +1,5 @@
 import Combine
+import Darwin
 import Foundation
 import SwiftUI
 
@@ -16,8 +17,9 @@ final class UsageMonitor: ObservableObject {
 
     var onChange: (() -> Void)?
 
-    private let refreshInterval: TimeInterval = 300
     private var timer: Timer?
+    private var fileWatcher: DispatchSourceFileSystemObject?
+    private var lastProfileCheck: AccountProfile?
 
     private var sessionResetDeadline: TimeInterval?
     private var weeklyResetDeadline: TimeInterval?
@@ -37,11 +39,35 @@ final class UsageMonitor: ObservableObject {
 
     func start() {
         refresh()
+        startFileWatcher()
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in self.refresh() }
         }
+    }
+
+    private func startFileWatcher() {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let fd = open(home, O_EVTONLY)
+        guard fd >= 0 else { return }
+
+        fileWatcher = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: .all, queue: .main)
+        fileWatcher?.setEventHandler { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                let currentProfile = AccountProfile.detectActive()
+                if currentProfile != self.lastProfileCheck {
+                    self.lastProfileCheck = currentProfile
+                    self.refresh()
+                    self.onChange?()
+                }
+            }
+        }
+        fileWatcher?.setCancelHandler {
+            close(fd)
+        }
+        fileWatcher?.resume()
     }
 
     func refresh() {

@@ -15,23 +15,15 @@ struct MenuBarLabelView: View {
                     Text(usage.weeklyReset)
                 }
             }
-            .opacity(usage.activeProfile == .personal ? 1 : 0.6)
+            .opacity(usage.activeProfile == .home ? 1 : 0.6)
 
             Spacer().frame(width: 8)
 
             VStack(alignment: .leading, spacing: 0) {
-                Text(usage.enterprisePercent)
-                Text(usage.enterpriseReset)
+                Text(usage.workPercent)
+                Text(usage.workReset)
             }
-            .opacity(usage.activeProfile == .enterprise ? 1 : 0.6)
-
-            Spacer().frame(width: 8)
-
-            VStack(alignment: .leading, spacing: 0) {
-                Text(usage.litellmPercent)
-                Text(usage.litellmReset)
-            }
-            .opacity(usage.activeProfile == .litellm ? 1 : 0.6)
+            .opacity(usage.activeProfile == .work ? 1 : 0.6)
         }
         .font(.system(size: 9, weight: .regular))
         .padding(.horizontal, 4)
@@ -46,9 +38,7 @@ struct MenuBarLabelView: View {
     usage.sessionReset = "3h"
     usage.weeklyPercent = "56%"
     usage.weeklyReset = "7d"
-    usage.enterprisePercent = "2%"
-    usage.enterpriseReset = "34d"
-    usage.litellmPercent = "5%"
-    usage.litellmReset = "6d"
+    usage.workPercent = "2%"
+    usage.workReset = "34d"
     return MenuBarLabelView(usage: usage)
 }

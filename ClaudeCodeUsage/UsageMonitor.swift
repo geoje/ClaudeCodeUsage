@@ -9,10 +9,8 @@ final class UsageMonitor: ObservableObject {
     @Published var sessionReset: String = "--"
     @Published var weeklyPercent: String = "--"
     @Published var weeklyReset: String = "--"
-    @Published var enterprisePercent: String = "--"
-    @Published var enterpriseReset: String = "--"
-    @Published var litellmPercent: String = "--"
-    @Published var litellmReset: String = "--"
+    @Published var workPercent: String = "--"
+    @Published var workReset: String = "--"
     @Published var activeProfile: AccountProfile?
 
     var onChange: (() -> Void)?
@@ -23,13 +21,12 @@ final class UsageMonitor: ObservableObject {
 
     private var sessionResetDeadline: TimeInterval?
     private var weeklyResetDeadline: TimeInterval?
-    private var enterpriseResetDeadline: TimeInterval?
-    private var litellmResetDeadline: TimeInterval?
+    private var workResetDeadline: TimeInterval?
 
     init() {
     }
 
-    private static let enterpriseExpiry: Date = {
+    private static let workExpiry: Date = {
         var components = DateComponents()
         components.year = 2026
         components.month = 9
@@ -81,17 +78,14 @@ final class UsageMonitor: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
 
-            let isPersonalActive = activeProfile == .personal
-            let isEnterpriseActive = activeProfile == .enterprise
-            let isLitellmActive = activeProfile == .litellm
+            let isHomeActive = activeProfile == .home
+            let isWorkActive = activeProfile == .work
 
-            async let personalOutput = isPersonalActive ? self.runScript(named: "usage-personal") : .init(stdout: nil, stderr: nil, exitCode: 0)
-            async let enterpriseOutput = isEnterpriseActive ? self.runScript(named: "usage-enterprise") : .init(stdout: nil, stderr: nil, exitCode: 0)
-            async let litellmOutput = isLitellmActive ? self.runScript(named: "usage-litellm") : .init(stdout: nil, stderr: nil, exitCode: 0)
+            async let homeOutput = isHomeActive ? self.runScript(named: "usage-home") : .init(stdout: nil, stderr: nil, exitCode: 0)
+            async let workOutput = isWorkActive ? self.runScript(named: "usage-work") : .init(stdout: nil, stderr: nil, exitCode: 0)
 
-            if let output = await personalOutput.stdout { self.applyPersonal(output) }
-            if let output = await enterpriseOutput.stdout { self.applyEnterprise(output) }
-            if let output = await litellmOutput.stdout { self.applyLitellm(output) }
+            if let output = await homeOutput.stdout { self.applyHome(output) }
+            if let output = await workOutput.stdout { self.applyWork(output) }
 
             self.onChange?()
         }
@@ -105,13 +99,9 @@ final class UsageMonitor: ObservableObject {
             weeklyReset = "\(max(0, Int(((deadline - now) / 86400).rounded(.up))))d"
         }
 
-        let enterpriseDaysUntil = Self.daysUntil(Self.enterpriseExpiry)
-        enterpriseResetDeadline = Date().addingTimeInterval(TimeInterval(enterpriseDaysUntil * 86400)).timeIntervalSince1970
-        enterpriseReset = "\(enterpriseDaysUntil)d"
-
-        let litellmDaysUntil = Self.daysUntil(Self.startOfNextMonth())
-        litellmResetDeadline = Date().addingTimeInterval(TimeInterval(litellmDaysUntil * 86400)).timeIntervalSince1970
-        litellmReset = "\(litellmDaysUntil)d"
+        let workDaysUntil = Self.daysUntil(Self.workExpiry)
+        workResetDeadline = Date().addingTimeInterval(TimeInterval(workDaysUntil * 86400)).timeIntervalSince1970
+        workReset = "\(workDaysUntil)d"
     }
 
     // MARK: - Script execution
@@ -157,7 +147,7 @@ final class UsageMonitor: ObservableObject {
 
     // MARK: - Parsing
 
-    private func applyPersonal(_ output: String) {
+    private func applyHome(_ output: String) {
         var headers: [String: String] = [:]
         for line in output.split(whereSeparator: \.isNewline) {
             guard let colonIndex = line.firstIndex(of: ":") else { continue }
@@ -183,16 +173,10 @@ final class UsageMonitor: ObservableObject {
         }
     }
 
-    private func applyEnterprise(_ output: String) {
+    private func applyWork(_ output: String) {
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.range(of: "^\\d+%$", options: .regularExpression) != nil else { return }
-        enterprisePercent = trimmed
-    }
-
-    private func applyLitellm(_ output: String) {
-        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "%", with: "")
-        guard let value = Double(trimmed) else { return }
-        litellmPercent = "\(Int(value))%"
+        workPercent = trimmed
     }
 
     // MARK: - Date helpers
@@ -202,13 +186,5 @@ final class UsageMonitor: ObservableObject {
         let target = Calendar.current.startOfDay(for: date)
         let days = Calendar.current.dateComponents([.day], from: start, to: target).day ?? 0
         return max(0, days)
-    }
-
-    private static func startOfNextMonth() -> Date {
-        let now = Date()
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.year, .month], from: now)
-        let startOfMonth = calendar.date(from: components) ?? now
-        return calendar.date(byAdding: .month, value: 1, to: startOfMonth) ?? now
     }
 }

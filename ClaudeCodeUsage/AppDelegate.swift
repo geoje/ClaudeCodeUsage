@@ -53,7 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         launchAtLoginItem = launchAtLogin
 
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit ClaudeCodeUsage", action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: ""))
         item.menu = menu
 
         statusItem = item

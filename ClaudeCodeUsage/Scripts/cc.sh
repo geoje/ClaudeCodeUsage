@@ -6,7 +6,7 @@ KEYCHAIN_ACCOUNT="gyeongho.yang"
 HOME_DIR="/Users/$KEYCHAIN_ACCOUNT"
 
 # Validate argument
-[[ -z "${1:-}" || ! "$1" =~ ^[1-3]$ ]] && { echo "Usage: $0 {1|2|3}"; exit 1; }
+[[ -z "${1:-}" || ! "$1" =~ ^[1-2]$ ]] && { echo "Usage: $0 {1|2}"; exit 1; }
 
 # Backup current credentials to appropriate profile (pro → home, enterprise → work)
 if secret=$(security find-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" -w 2>/dev/null); then
@@ -18,18 +18,13 @@ fi
 target=$([[ "$1" == "1" ]] && echo "$HOME_DIR/.claude-home" || echo "$HOME_DIR/.claude-work")
 ln -sfn "$target" "$HOME_DIR/.claude"
 
-# Setup settings file for selected profile
-[[ "$1" == "2" ]] && echo '{}' > "$HOME_DIR/.claude-work/settings.json"
-[[ "$1" == "3" ]] && cp "$HOME_DIR/.claude-work/settings.dh.json" "$HOME_DIR/.claude-work/settings.json"
-
 # Restore credentials from target profile to keychain
 [[ -f "$target/keychain-credentials.json" ]] && security add-generic-password -U -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" -w "$(jq -c . "$target/keychain-credentials.json")"
 
 # Print profile name
 case "$1" in
-  1) echo "Personal" ;;
-  2) echo "Enterprise" ;;
-  3) echo "LiteLLM" ;;
+  1) echo "Home" ;;
+  2) echo "Work" ;;
 esac
 
 # Restore latest backup or clean up old one

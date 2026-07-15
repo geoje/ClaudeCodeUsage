@@ -1,21 +1,19 @@
 import Foundation
 
 enum AccountProfile: CaseIterable {
-    case personal, enterprise, litellm
+    case home, work
 
     var title: String {
         switch self {
-        case .personal: return "Personal"
-        case .enterprise: return "Enterprise"
-        case .litellm: return "LiteLLM"
+        case .home: return "Home"
+        case .work: return "Work"
         }
     }
 
     var argument: String {
         switch self {
-        case .personal: return "1"
-        case .enterprise: return "2"
-        case .litellm: return "3"
+        case .home: return "1"
+        case .work: return "2"
         }
     }
 
@@ -27,14 +25,9 @@ enum AccountProfile: CaseIterable {
 
         switch (target as NSString).lastPathComponent {
         case ".claude-home":
-            return .personal
+            return .home
         case ".claude-work":
-            guard let data = FileManager.default.contents(atPath: "\(home)/.claude-work/settings.json"),
-                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            else {
-                return nil
-            }
-            return object.isEmpty ? .enterprise : .litellm
+            return .work
         default:
             return nil
         }

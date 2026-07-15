@@ -14,12 +14,15 @@ final class UsageMonitor: ObservableObject {
     @Published var litellmReset: String = "--"
     @Published var activeProfile: AccountProfile?
 
-    private var enterprisePercentMemory: String?
-
     var onChange: (() -> Void)?
 
     private let refreshInterval: TimeInterval = 300
     private var timer: Timer?
+
+    private var sessionResetDeadline: TimeInterval?
+    private var weeklyResetDeadline: TimeInterval?
+    private var enterpriseResetDeadline: TimeInterval?
+    private var litellmResetDeadline: TimeInterval?
 
     init() {
     }
@@ -42,31 +45,63 @@ final class UsageMonitor: ObservableObject {
     }
 
     func refresh() {
-        activeProfile = AccountProfile.detectActive()
-        enterpriseReset = "\(Self.daysUntil(Self.enterpriseExpiry))d"
-        litellmReset = "\(Self.daysUntil(Self.startOfNextMonth()))d"
+        let newProfile = AccountProfile.detectActive()
+        activeProfile = newProfile
 
-        let isEnterpriseActive = activeProfile == .enterprise
-        if !isEnterpriseActive {
-            enterprisePercent = enterprisePercentMemory ?? "--"
-        }
+        let now = Date().timeIntervalSince1970
+
+        checkAndUpdateExpiredPercentages(now: now)
+        updateAllResetTimes(now: now)
 
         Task { [weak self] in
             guard let self else { return }
-            async let personalOutput = self.runScript(named: "usage-personal")
-            async let litellmOutput = self.runScript(named: "usage-litellm")
 
-            if isEnterpriseActive {
-                let result = await self.runScript(named: "usage-enterprise")
-                print("[Enterprise] exitCode=\(result.exitCode), stdout=\(result.stdout ?? "<nil>"), stderr=\(result.stderr ?? "<nil>")")
-                if let output = result.stdout { self.applyEnterprise(output) }
-            }
+            let isPersonalActive = activeProfile == .personal
+            let isEnterpriseActive = activeProfile == .enterprise
+            let isLitellmActive = activeProfile == .litellm
+
+            async let personalOutput = isPersonalActive ? self.runScript(named: "usage-personal") : .init(stdout: nil, stderr: nil, exitCode: 0)
+            async let enterpriseOutput = isEnterpriseActive ? self.runScript(named: "usage-enterprise") : .init(stdout: nil, stderr: nil, exitCode: 0)
+            async let litellmOutput = isLitellmActive ? self.runScript(named: "usage-litellm") : .init(stdout: nil, stderr: nil, exitCode: 0)
 
             if let output = await personalOutput.stdout { self.applyPersonal(output) }
+            if let output = await enterpriseOutput.stdout { self.applyEnterprise(output) }
             if let output = await litellmOutput.stdout { self.applyLitellm(output) }
 
             self.onChange?()
         }
+    }
+
+    private func checkAndUpdateExpiredPercentages(now: TimeInterval) {
+        if let deadline = sessionResetDeadline, now >= deadline {
+            sessionPercent = "0%"
+        }
+        if let deadline = weeklyResetDeadline, now >= deadline {
+            weeklyPercent = "0%"
+        }
+        if let deadline = enterpriseResetDeadline, now >= deadline {
+            enterprisePercent = "0%"
+        }
+        if let deadline = litellmResetDeadline, now >= deadline {
+            litellmPercent = "0%"
+        }
+    }
+
+    private func updateAllResetTimes(now: TimeInterval) {
+        if let deadline = sessionResetDeadline {
+            sessionReset = "\(max(0, Int(((deadline - now) / 3600).rounded(.up))))h"
+        }
+        if let deadline = weeklyResetDeadline {
+            weeklyReset = "\(max(0, Int(((deadline - now) / 86400).rounded(.up))))d"
+        }
+
+        let enterpriseDaysUntil = Self.daysUntil(Self.enterpriseExpiry)
+        enterpriseResetDeadline = Date().addingTimeInterval(TimeInterval(enterpriseDaysUntil * 86400)).timeIntervalSince1970
+        enterpriseReset = "\(enterpriseDaysUntil)d"
+
+        let litellmDaysUntil = Self.daysUntil(Self.startOfNextMonth())
+        litellmResetDeadline = Date().addingTimeInterval(TimeInterval(litellmDaysUntil * 86400)).timeIntervalSince1970
+        litellmReset = "\(litellmDaysUntil)d"
     }
 
     // MARK: - Script execution
@@ -126,12 +161,14 @@ final class UsageMonitor: ObservableObject {
         if let utilization = headers["anthropic-ratelimit-unified-5h-utilization"].flatMap(Double.init),
            let reset = headers["anthropic-ratelimit-unified-5h-reset"].flatMap(Double.init) {
             sessionPercent = "\(Int((utilization * 100).rounded()))%"
+            sessionResetDeadline = reset
             sessionReset = "\(max(0, Int(((reset - now) / 3600).rounded(.up))))h"
         }
 
         if let utilization = headers["anthropic-ratelimit-unified-7d-utilization"].flatMap(Double.init),
            let reset = headers["anthropic-ratelimit-unified-7d-reset"].flatMap(Double.init) {
             weeklyPercent = "\(Int((utilization * 100).rounded()))%"
+            weeklyResetDeadline = reset
             weeklyReset = "\(max(0, Int(((reset - now) / 86400).rounded(.up))))d"
         }
     }
@@ -140,7 +177,6 @@ final class UsageMonitor: ObservableObject {
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.range(of: "^\\d+%$", options: .regularExpression) != nil else { return }
         enterprisePercent = trimmed
-        enterprisePercentMemory = trimmed
     }
 
     private func applyLitellm(_ output: String) {

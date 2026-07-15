@@ -10,7 +10,7 @@ HOME_DIR="/Users/$KEYCHAIN_ACCOUNT"
 
 # Backup current credentials to appropriate profile (pro → home, enterprise → work)
 if secret=$(security find-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" -w 2>/dev/null); then
-  backup_target=$(echo "$secret" | jq -r '.subscriptionType' 2>/dev/null | grep -q "pro" && echo "$HOME_DIR/.claude-home" || echo "$HOME_DIR/.claude-work")
+  backup_target=$(echo "$secret" | jq -r '.claudeAiOauth.subscriptionType' 2>/dev/null | grep -q "pro" && echo "$HOME_DIR/.claude-home" || echo "$HOME_DIR/.claude-work")
   [[ -n "$backup_target" ]] && printf '%s' "$secret" | jq . > "$backup_target/keychain-credentials.json" && chmod 600 "$backup_target/keychain-credentials.json"
 fi
 

@@ -93,7 +93,8 @@ final class UsageMonitor: ObservableObject {
 
     private func updateAllResetTimes(now: TimeInterval) {
         if let deadline = sessionResetDeadline {
-            sessionReset = "\(max(0, Int(((deadline - now) / 3600).rounded(.up))))h"
+            let hours = max(0, Int(((deadline - now) / 3600).rounded(.up)))
+            sessionReset = "\(min(hours, 5))h"
         }
         if let deadline = weeklyResetDeadline {
             weeklyReset = "\(max(0, Int(((deadline - now) / 86400).rounded(.up))))d"
@@ -161,7 +162,8 @@ final class UsageMonitor: ObservableObject {
         if let percent = fields["SESSION_PERCENT"], let reset = fields["SESSION_RESET_EPOCH"].flatMap(Double.init) {
             sessionPercent = "\(percent)%"
             sessionResetDeadline = reset
-            sessionReset = "\(max(0, Int(((reset - now) / 3600).rounded(.up))))h"
+            let hours = max(0, Int(((reset - now) / 3600).rounded(.up)))
+            sessionReset = "\(min(hours, 5))h"
         }
 
         if let percent = fields["WEEKLY_PERCENT"], let reset = fields["WEEKLY_RESET_EPOCH"].flatMap(Double.init) {
